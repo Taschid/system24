@@ -18,8 +18,13 @@ const STABLE_SOURCE = 'https://raw.githubusercontent.com/itmesarah/DiscordClasse
 const CANARY_SOURCE = 'https://raw.githubusercontent.com/itmesarah/DiscordClasses/main/canaryclasses.json';
 const CACHE_FILE = path.join(root, '.theme-dev', 'classes.json');
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-// Discord's hashed class names: readable name, underscore(s), 5-6 hex chars. e.g. listItem__650eb, grabber_ec237e.
-const CLASS_PATTERN = /\.(-?[A-Za-z_][\w-]*?_[0-9a-f]{5,6})(?![\w-])/g;
+// Discord hashed class names. Old scheme: 5-6 hex chars after an underscore (listItem__650eb).
+// New scheme (2026-11-05): 5-8 chars of [A-Za-z0-9_-] containing a digit or uppercase letter
+// (chat_z_gUBg, channelTextArea_2x8-Qn). The guard keeps readable suffixes like _disabled out.
+const OLD_HASH = '[0-9a-f]{5,6}';
+const NEW_HASH = '(?=[A-Za-z0-9_-]{5,8}$)(?=[A-Za-z0-9_-]*[0-9A-Z])[A-Za-z0-9_-]{5,8}';
+const CLASS_PATTERN = new RegExp(`\\.(-?[A-Za-z_][\\w-]*?_(?:${OLD_HASH}|${NEW_HASH}))(?![\\w-])`, 'g');
+const HASH_SUFFIX = new RegExp(`_+(?:${OLD_HASH}|${NEW_HASH})$`);
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -53,7 +58,7 @@ function classesFrom(data) {
     return classes;
 }
 
-const readableName = (name) => name.replace(/_+[0-9a-f]{5,6}$/, '');
+const readableName = (name) => name.replace(HASH_SUFFIX, '');
 
 function usedClasses() {
     const used = [];
@@ -105,7 +110,11 @@ async function main() {
     process.exitCode = report.length ? 1 : 0;
 }
 
-main().catch((error) => {
-    console.error(error.message);
-    process.exitCode = 2;
-});
+if (require.main === module) {
+    main().catch((error) => {
+        console.error(error.message);
+        process.exitCode = 2;
+    });
+}
+
+module.exports = { CLASS_PATTERN, HASH_SUFFIX, readableName };
